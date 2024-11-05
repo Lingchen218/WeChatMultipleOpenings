@@ -5,6 +5,8 @@
 #include <TlHelp32.h>
 #include <vector>
 #include <exception>
+
+
 //#pragma comment( linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"" )
 #define NT_SUCCESS(x) ((x) >= 0)
 #define STATUS_INFO_LENGTH_MISMATCH 0xc0000004
@@ -133,7 +135,10 @@ std::vector<int> getPidsByName( const wchar_t processName[MAX_PATH] )
 }
 
 
-int enumhandle(DWORD ProcessId)
+
+
+
+int enumhandle(DWORD ProcessId, const wchar_t Mutant1[])
 {
 	
 
@@ -304,7 +309,9 @@ int enumhandle(DWORD ProcessId)
 					//wprintf(L"ceshi %s\n",objectTypeInfo->Name.Buffer);
 					 const wchar_t Mutant[] = L"Mutant";
 					 // \Sessions\1\BaseNamedObjects\_WeChat_App_Instance_Identity_Mutex_Name
-					 const wchar_t Mutant1[] = L"\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_Identity_Mutex_Name";
+					 
+
+					 // 先判断类型
 					if (!wcscmp(objectTypeInfo->Name.Buffer, Mutant)) {
 						//printf(" 对象类型名:%wZ\n", &objectTypeInfo->Name);
 						
@@ -312,7 +319,18 @@ int enumhandle(DWORD ProcessId)
 							printf(" 对象名:%wZ\n", &objectName);
 							DuplicateHandle(processHandle, (HANDLE)(handle.Handle), NULL, NULL, 0, false, DUPLICATE_CLOSE_SOURCE);
 							printf("句柄值%d\n", handle.Handle); // 数字
-						};
+						}
+						else {
+							// std::cout << objectName.Buffer << std::endl;
+							//wchar_t* p = L"hello world.";
+							char descBuf[128] = { 0 };
+							sprintf(descBuf, "%S", objectName.Buffer);
+							printf("str: %s\n", descBuf);
+							//sprintf_s(descBuf, 128,objectName.Buffer)
+							//wsprintf(objectName.Buffer, "%S", descBuf);
+
+
+						}
 						
 						
 						
@@ -322,6 +340,7 @@ int enumhandle(DWORD ProcessId)
 
 			} while (false);//;
 
+			// 关闭句柄
 			if (dupHandle)
 			{
 				CloseHandle(dupHandle);
@@ -351,8 +370,10 @@ int weixinshuankaimain() {
 		std::cout << "未找到微信\n";
 		return 0;
 	}
+	const wchar_t Mutant1[] = L"\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_Identity_Mutex_Name";
 	for (int& i : pids) {
-		enumhandle(i);
+		// 如果有多个微信，需要判断多个微信是不是都关闭了互斥体句柄
+		enumhandle(i, Mutant1);
 	}
 	return 0;
 }
@@ -399,12 +420,33 @@ int GetScreenRect(int a = 0)
 	return count;
 }
 
+void wcharTochar(const wchar_t* wchar, char* chr, int length)
+{
+	WideCharToMultiByte(CP_ACP, 0, wchar, -1,
+		chr, length, NULL, NULL);
+}
+
 int main(int argc, WCHAR* argv[]) {
 	
 	//int b = 0x123;
 	//MessageBoxA(0,0,0,0);
 	
 	//std::cout << "显示器数量"<< GetScreenRect()<<std::endl;
+	/*size_t bs = wcslen(argv[1]) * 2;
+	char* buffer = (char*)malloc(bs);
+
+	char descBuf[128] = { 0 };
+	sprintf(descBuf, "%S", argv[1]);
+	printf("str: %s\n", descBuf);*/
+	// char descBuf[128] = { 0 };
+	//sprintf(descBuf, "%S", argv[1]);
+	
+
+	// wcharTochar(argv[1], descBuf, sizeof(descBuf));
+	 // printf("str: %s\n", descBuf);
+	//printf("%S\n", argv[0]);
+	// std::cout << argc << std::endl;
+	 // std::cout << argv[1] << std::endl;
 	weixinshuankaimain();
 	/*try {
 		CloseHandle((HANDLE)0xf4);
