@@ -1,11 +1,11 @@
 #include "win.h"
 #include <stdio.h>
 #include <iostream>
-#include <atlstr.h>
+//#include <atlstr.h>
 #include <TlHelp32.h>
 #include <vector>
 #include <exception>
-
+#include <string.h>
 
 //#pragma comment( linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"" )
 #define NT_SUCCESS(x) ((x) >= 0)
@@ -18,6 +18,31 @@
 
 
 
+void wcharTochar(const wchar_t* wchar, char* chr, int length)
+{
+	WideCharToMultiByte(CP_ACP, 0, wchar, -1,
+		chr, length, NULL, NULL);
+}
+
+char* wchar2char(const wchar_t* wchar)
+{
+	char* m_char;
+	int len = WideCharToMultiByte(CP_ACP, 0, wchar, wcslen(wchar), NULL, 0, NULL, NULL);
+	m_char = new char[len + 1];
+	WideCharToMultiByte(CP_ACP, 0, wchar, wcslen(wchar), m_char, len, NULL, NULL);
+	m_char[len] = '\0';
+	return m_char;
+}
+
+
+int CharToWchar(wchar_t* wcharStr, const char* charStr) {
+	int len = MultiByteToWideChar(CP_ACP, 0, charStr, strlen(charStr), NULL, 0);
+
+	MultiByteToWideChar(CP_ACP, 0, charStr, strlen(charStr), wcharStr, len);
+	wcharStr[len] = '\0';
+	return len;
+}
+
 
 /*
 	brief：*获取进程PID
@@ -25,17 +50,18 @@
 	ret: 成功->进程PID
 		 失败->-1 空的列表
 */
-std::vector<int> getPidsByName( const wchar_t processName[MAX_PATH] )
+std::vector<int> getPidsByName( const char* process )
 {
-	HANDLE hSnapshot;
-	LPPROCESSENTRY32 lppe;
-	PROCESSENTRY32W ssss;
-	lppe = &ssss;
+	//HANDLE hSnapshot;
+	
+
+	PROCESSENTRY32 entry;
+	//lppe = &ssss;
 	BOOL Found;
-	hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	lppe->dwSize = sizeof(PROCESSENTRY32);
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	entry.dwSize = sizeof(PROCESSENTRY32);
 	//lppedwSize
-	Found = Process32First(hSnapshot, lppe);
+	Found = Process32First(hSnapshot, &entry);
 	//WCHAR mProce[MAX_PATH] = processName;
 	int pid = -1;
 	std::vector<int> getPids;
@@ -43,15 +69,19 @@ std::vector<int> getPidsByName( const wchar_t processName[MAX_PATH] )
 	{
 		//strcpy(mProce, processName);
 		//strcat(mProce, ".exe");
-		if (wcscmp(processName, lppe->szExeFile) == 0)//进程名比较  
+
+		
+		if (strcmpi(entry.szExeFile, process) == 0)//进程名比较  
 		{
 			Found = TRUE;
-			pid = lppe->th32ProcessID;
+			pid = entry.th32ProcessID;
 			getPids.emplace_back(pid);
 			//break;
 		}
 		
-		Found = Process32Next(hSnapshot, lppe);//得到下一个进程  
+		
+		
+		Found = Process32Next(hSnapshot, &entry);//得到下一个进程  
 	}
 	CloseHandle(hSnapshot);
 	return getPids;
@@ -66,7 +96,7 @@ int enumhandle(DWORD ProcessId, const wchar_t Mutant1[])
 	
 
 	
-	static HMODULE hNtMod = LoadLibrary(L"ntdll.dll");
+	static HMODULE hNtMod = LoadLibrary("ntdll.dll");
 	if (!hNtMod)
 	{
 		return 0;
@@ -288,18 +318,25 @@ int enumhandle(DWORD ProcessId, const wchar_t Mutant1[])
 	return 0;
 }
 
-int weixinshuankaimain() {
+int weixinshuankaimain(const char* process, const char* muprocessc) {
 	
-	std::vector<int> pids = getPidsByName(_T("WeChat.exe"));
+	std::vector<int> pids = getPidsByName(process);
 	if (pids.size() < 1) {
-		std::cout << "WeChat.exe\n";
+		
+		std::string proces_string = process;
+		std::cout << "not find " << proces_string + '\n';
 		return 0;
 	}
-	const wchar_t Mutant1[] = L"\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_Identity_Mutex_Name";
+	
+	int id_len = strlen(muprocessc) + 16;
+	wchar_t* w_charStr = new wchar_t[id_len];
+	CharToWchar(w_charStr,muprocessc );
+	//const wchar_t Mutant1[] = L"\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_Identity_Mutex_Name";
 	for (int& i : pids) {
 		// 如果有多个微信，需要判断多个微信是不是都关闭了互斥体句柄
-		enumhandle(i, Mutant1);
+		enumhandle(i, w_charStr);
 	}
+	delete[]w_charStr;
 	return 0;
 }
 
@@ -345,17 +382,44 @@ int GetScreenRect(int a = 0)
 	return count;
 }
 
-void wcharTochar(const wchar_t* wchar, char* chr, int length)
-{
-	WideCharToMultiByte(CP_ACP, 0, wchar, -1,
-		chr, length, NULL, NULL);
+
+void teschar() {
+	 std::string bb ;
+	 bb.reserve(10);
+	 bb = "x";
+	printf("%zu \n %zu \n %zu \n%zu\n", bb.length(),bb.size(), sizeof(bb), sizeof(std::string));
 }
 
-int main(int argc, WCHAR* argv[]) {
+
+int main(int argc, char* argv[]) {
 	
+	
+	if (argv[1] != 0 && argv[2] != 0) {
+		// 可以使用参数的形式传递进程名称 和 互斥句柄
+		weixinshuankaimain(argv[1], argv[2]);
+	}
+	else {
+		// 默认双开微信 
+		weixinshuankaimain("WeChat.exe", "\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_Identity_Mutex_Name");
+	}
+	
+#ifdef MBCS
+	std::cout << "当前字符集: 多字节字符集 (MBCS)" << std::endl;
+#elif defined(UNICODE) || defined(_UNICODE)
+	std::cout << "当前字符集: Unicode 字符集 (UNICODE)" << std::endl;
+	std::wcslen(pe.szExeFile);
+#elif defined(_WCHAR_T_DEFINED)
+	std::cout << "当前字符集: 宽字符集 (WCHAR_T_DEFINED)" << std::endl;
+	// size_t szexefile_strLen = std::wcslen(pe.szExeFile);
+#else
+	std::cout << "未知的字符集设置" << std::endl;
+#endif
+
+
+
 	//int b = 0x123;
 	//MessageBoxA(0,0,0,0);
-	
+
 	//std::cout << "显示器数量"<< GetScreenRect()<<std::endl;
 	/*size_t bs = wcslen(argv[1]) * 2;
 	char* buffer = (char*)malloc(bs);
@@ -365,14 +429,16 @@ int main(int argc, WCHAR* argv[]) {
 	printf("str: %s\n", descBuf);*/
 	// char descBuf[128] = { 0 };
 	//sprintf(descBuf, "%S", argv[1]);
-	
 
-	// wcharTochar(argv[1], descBuf, sizeof(descBuf));
+	//size_t bbb = std::wcslen(argv[1]);
+
+	// std::cout << argv[0] << argv[1];
+	//argv[1]
+	 //wcharTochar(argv[1], descBuf, sizeof(descBuf));
 	 // printf("str: %s\n", descBuf);
 	//printf("%S\n", argv[0]);
 	// std::cout << argc << std::endl;
 	 // std::cout << argv[1] << std::endl;
-	weixinshuankaimain();
 	/*try {
 		CloseHandle((HANDLE)0xf4);
 	}

@@ -5,10 +5,12 @@
 #include <windows.h>
 #include <iostream>
 #include <TlHelp32.h>
-#include <atlbase.h>
+//#include <atlbase.h>
 // #include <atlstr.h>
 int  wcscasecmp(const  wchar_t* cs, const  wchar_t* ct)
 {
+    // 判断两个字符串是否相同 ，忽略大小写
+    // 
     while (towlower(*cs) == towlower(*ct))
     {
         if (*cs == 0)
@@ -35,16 +37,31 @@ HANDLE GetProcessHandle(LPCWSTR lpName)
     {
         return NULL;
     }
+
     PROCESSENTRY32 pe = { sizeof(pe) };
     BOOL fOk;
-    MessageBoxA(0, "fdddd", 0, 0);
+    // MessageBoxA(0, "fdddd", 0, 0);
     for (fOk = Process32First(hSnapshot, &pe); fOk; fOk = Process32Next(hSnapshot, &pe))
     {
-        if (!wcscasecmp(pe.szExeFile, lpName)) // 不区分大小写
+        wchar_t *cc = nullptr;
+#ifdef MBCS
+        std::cout << "当前字符集: 多字节字符集 (MBCS)" << std::endl;
+#elif defined(UNICODE) || defined(_UNICODE)
+        std::cout << "当前字符集: Unicode 字符集 (UNICODE)" << std::endl;
+        size_t szexefile_strLen = std::wcslen(pe.szExeFile);
+#elif defined(_WCHAR_T_DEFINED)
+        std::cout << "当前字符集: 宽字符集 (WCHAR_T_DEFINED)" << std::endl;
+        size_t szexefile_strLen = strlen(pe.szExeFile);
+#endif
+        
+        cc = static_cast<wchar_t*>(malloc(szexefile_strLen *2));
+        ::mbstowcs(cc, pe.szExeFile, szexefile_strLen * 2);
+        if (!wcscasecmp(cc, lpName)) // 不区分大小写
         {
             CloseHandle(hSnapshot);
             return GetProcessHandle(pe.th32ProcessID);
         }
+        free(cc);
     }
     return NULL;
 
@@ -54,7 +71,7 @@ void test() {
 
     // 获取进程句柄
     //const char  sd[] = "wechat.exe";
-    LPCWSTR aaav = _T("wechat.exe");
+    LPCWSTR aaav = L"wechat.exe";
     GetProcessHandle(aaav);
 
     char s[] = "\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_ldentity_Mutex_Name";
@@ -62,8 +79,8 @@ void test() {
     memset(wszClassName, 0, sizeof(wszClassName));
     MultiByteToWideChar(CP_ACP, 0, s, strlen(s) + 1, wszClassName,
         sizeof(wszClassName) / sizeof(wszClassName[0]));
-    _T("\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_ldentity_Mutex_Name");
-    HANDLE hProcess = OpenMutex(MUTEX_ALL_ACCESS, true, _T("\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_ldentity_Mutex_Name"));
+    // _T("\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_ldentity_Mutex_Name");
+    HANDLE hProcess = OpenMutex(MUTEX_ALL_ACCESS, true, "\\Sessions\\1\\BaseNamedObjects\\_WeChat_App_Instance_ldentity_Mutex_Name");
     if (hProcess == NULL) {
         std::cout << "OpenProcess failed: " << GetLastError() << std::endl;
         return;
